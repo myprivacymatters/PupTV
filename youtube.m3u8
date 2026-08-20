@@ -1,22 +1,16 @@
 #EXTM3U
 
-#EXTINF:-1 tvg-id="puptv.shepherds.yt" tvg-name="PUP TV · Shepherds" group-title="Pup Tv", PUP TV · Shepherds
+#EXTINF:-1 tvg-id="puptv.relax.yt" tvg-name="PUP TV · Relaxation" group-title="Pup Tv", PUP TV · Relaxation
 https://www.youtube.com/watch?v=1oh9IEwBbFY
 
-#EXTINF:-1 tvg-id="puptv.puppies.yt" tvg-name="PUP TV · Service Puppies" group-title="Pup Tv", PUP TV · Service Puppies
-https://www.youtube.com/watch?v=1oh9IEwBbFY
-
-#EXTINF:-1 tvg-id="puptv.greatdanes.yt" tvg-name="PUP TV · Great Danes" group-title="Pup Tv", PUP TV · Great Danes
+#EXTINF:-1 tvg-id="puptv.enrichment.yt" tvg-name="PUP TV · Enrichment" group-title="Pup Tv", PUP TV · Enrichment
 https://www.youtube.com/watch?v=1oh9IEwBbFY
 
 #EXTINF:-1 tvg-id="puptv.daycare.yt" tvg-name="PUP TV · The Daycare" group-title="Pup Tv", PUP TV · The Daycare
 https://www.youtube.com/watch?v=1oh9IEwBbFY
 
-#EXTINF:-1 tvg-id="puptv.nursery.yt" tvg-name="PUP TV · The Nursery" group-title="Pup Tv", PUP TV · The Nursery
+#EXTINF:-1 tvg-id="puptv.rescue.yt" tvg-name="PUP TV · Rescue Dogs" group-title="Pup Tv", PUP TV · Rescue Dogs
 https://www.youtube.com/watch?v=1oh9IEwBbFY
 
-#EXTINF:-1 tvg-id="puptv.relax.yt" tvg-name="PUP TV · Relaxation" group-title="Pup Tv", PUP TV · Relaxation
-https://www.youtube.com/watch?v=1oh9IEwBbFY
-
-#EXTINF:-1 tvg-id="puptv.allday.yt" tvg-name="PUP TV · All Dogs 24/7" group-title="Pup Tv", PUP TV · All Dogs 24/7
+#EXTINF:-1 tvg-id="puptv.service.yt" tvg-name="PUP TV · Service Dogs" group-title="Pup Tv", PUP TV · Service Dogs
 https://www.youtube.com/watch?v=1oh9IEwBbFY
