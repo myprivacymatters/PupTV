@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-# yt-dlp based resolver for PUP TV.
-# Reads youtubeLink.txt ("Name || id || Category" then a URL line),
-# resolves each YouTube live URL to a real HLS manifest, prints an M3U to stdout.
-# Channels that don't resolve (offline / blocked) are skipped, not faked.
 import subprocess, sys
 
+LOGO_BASE = "http://plex.taila87cd9.ts.net:8899"
+LOGOS = {
+    "puptv.relax.yt":      "pup-relax.png",
+    "puptv.enrichment.yt": "pup-enrichment.png",
+    "puptv.daycare.yt":    "pup-daycare.png",
+    "puptv.rescue.yt":     "pup-rescue.png",
+    "puptv.service.yt":    "pup-service.png",
+}
+
 def resolve(url):
-    # Try the android client first (usually dodges the datacenter bot-wall), then web.
     for extra in (["--extractor-args", "youtube:player_client=android"],
                   ["--extractor-args", "youtube:player_client=web"],
                   []):
@@ -16,14 +20,14 @@ def resolve(url):
                 capture_output=True, text=True, timeout=120)
             urls = [l.strip() for l in r.stdout.splitlines() if l.strip().startswith("http")]
             if urls:
-                for u in urls:                       # prefer an HLS manifest
+                for u in urls:
                     if ".m3u8" in u or "manifest" in u:
                         return u
                 return urls[0]
             if r.stderr.strip():
                 sys.stderr.write(r.stderr.strip().splitlines()[-1] + "\n")
         except Exception as e:
-            sys.stderr.write(f"  err {url}: {e}\n")
+            sys.stderr.write("  err %s: %s\n" % (url, e))
     return None
 
 def main():
@@ -45,13 +49,15 @@ def main():
             name, cid, cat = meta
             url = resolve(s)
             if url:
-                print(f'\n#EXTINF:-1 tvg-id="{cid}" tvg-name="{name}" group-title="{cat}",{name}')
+                logo = LOGOS.get(cid, "")
+                tag = ' tvg-logo="%s/%s"' % (LOGO_BASE, logo) if logo else ""
+                print('\n#EXTINF:-1 tvg-id="%s" tvg-name="%s"%s group-title="%s",%s' % (cid, name, tag, cat, name))
                 print(url)
-                sys.stderr.write(f"OK    {name}\n"); ok += 1
+                sys.stderr.write("OK    %s\n" % name); ok += 1
             else:
-                sys.stderr.write(f"SKIP  {name}  (offline or blocked)\n"); fail += 1
+                sys.stderr.write("SKIP  %s  (offline or blocked)\n" % name); fail += 1
             meta = None
-    sys.stderr.write(f"\nResolved {ok}, skipped {fail}\n")
+    sys.stderr.write("\nResolved %d, skipped %d\n" % (ok, fail))
 
 if __name__ == "__main__":
     main()
