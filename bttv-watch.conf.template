@@ -1,0 +1,8 @@
+# BT TV watcher config. Fill in PLEX_TOKEN, then: chmod 600 bttv-watch.conf
+# Rename this file to bttv-watch.conf (drop the .template) once filled in.
+PLEX_TOKEN=PUT_YOUR_PLEX_TOKEN_HERE
+PLEX_URL=http://localhost:32400
+BTTV_FOLDER=/media/plex/MyBook/BTTV
+PLEX_SECTION=4
+NTV_URL=http://localhost:19850
+BTTV_CHANNEL=user_59dff7fa-26ac-4703-8768-0056ae352f56
