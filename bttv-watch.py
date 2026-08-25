@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """
-BT TV auto-add watcher (free, local, no external API).
-On each run (via cron): finds NEW .mkv files in the BT TV folder, generates a
-title + keyword-based summary, triggers a Plex scan of the BT TV library,
-writes the metadata to Plex, and refreshes ONLY the BT TV channel schedule.
+BT TV auto-maintain watcher (free, local, no external API).
 
-Config is read from bttv-watch.conf in the same directory:
+Runs via cron. Tracks the Plex BT TV library's item list:
+  - NEW items  -> generate title + keyword summary, write to Plex.
+  - REMOVED items (deleted or removed-from-library in Plex) -> just note them.
+  - ANY change (add or remove) -> refresh ONLY the BT TV channel schedule.
+
+Safety guard: if Plex returns 0 items or is unreachable, do NOTHING (prevents a
+drive unmount / server hiccup from looking like "everything was deleted").
+
+Config: bttv-watch.conf (same dir):
   PLEX_TOKEN=...
   PLEX_URL=http://localhost:32400
-  BTTV_FOLDER=/media/plex/MyBook/BTTV
+  BTTV_FOLDER=/media/plex/MyBook/BTTV   (kept for reference; not required now)
   PLEX_SECTION=4
   NTV_URL=http://localhost:19850
   BTTV_CHANNEL=user_59dff7fa-26ac-4703-8768-0056ae352f56
@@ -18,7 +23,7 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(HERE, "bttv-watch.conf")
-SEEN = os.path.join(HERE, "bttv-watch.seen")   # list of already-processed filenames
+STATE = os.path.join(HERE, "bttv-watch.state")   # JSON: {ratingKey: filename} last seen in Plex
 
 def load_conf():
     c = {}
@@ -31,50 +36,42 @@ def load_conf():
     return c
 
 def clean_title(fname):
-    t = re.sub(r"\.[A-Za-z0-9]+$", "", fname)          # drop extension
-    t = t.replace("｜", "|").replace("：", ":")          # fix fullwidth junk
+    t = re.sub(r"\.[A-Za-z0-9]+$", "", fname)
+    t = t.replace("｜", "|").replace("：", ":")
     t = re.sub(r"\s+", " ", t).strip()
     return t
 
 def summarize(title):
-    """Keyword-based topical summary. Tuned to BT TV content."""
     low = title.lower()
-    # Part N (ambient loops) -> note the part
     part = ""
     m = re.search(r"\bpart\s*(\d+)\b", low)
     if m: part = f" (Part {int(m.group(1))})"
-
-    if any(w in low for w in ["fireplace", "yule", "sleep sounds", "cozy"]):
+    if any(w in low for w in ["fireplace","yule","sleep sounds","cozy"]):
         return f"A cozy Boston Terrier fireside scene — crackling warmth on a gentle, relaxing loop.{part}".strip()
     if "relaxing music" in low or ("relaxing" in low and "music" in low):
         return "Calming music paired with mellow Boston Terrier company — easy, soothing background viewing."
-    if any(w in low for w in ["judging", "champ show", "champion", "breed judging", "melbourne royal", "club of"]):
+    if any(w in low for w in ["judging","champ show","champion","breed judging","melbourne royal","club of"]):
         return "Conformation judging and breed competition showcasing Boston Terriers at their finest."
-    if any(w in low for w in ["grooming", "bath", "give a bath"]):
+    if any(w in low for w in ["grooming","bath","give a bath"]):
         return "Grooming and care — keeping the dapper Boston Terrier clean, trimmed, and looking sharp."
-    if any(w in low for w in ["training", "alpha", "train"]):
+    if any(w in low for w in ["training","trainer","alpha","train"]):
         return "Boston Terrier training and behavior, from basics to teaching an eager young pup."
-    if any(w in low for w in ["puppy", "puppies", "baby", "babies"]):
+    if any(w in low for w in ["puppy","puppies","baby","babies"]):
         return "Adorable Boston Terrier puppy antics — clumsy, playful, and impossibly cute."
     if "service dog" in low or "service dogs" in low:
         return "A look at Boston Terriers as loyal service and companion dogs."
-    if any(w in low for w in ["breed information", "everything you need", "characteristics", "breed info"]):
+    if any(w in low for w in ["breed information","everything you need","characteristics","breed info"]):
         return "A complete Boston Terrier breed profile — history, temperament, traits, and care."
-    if any(w in low for w in ["history", "gentleman", "origin", "pit fighter", "became"]):
+    if any(w in low for w in ["history","gentleman","origin","pit fighter","became"]):
         return "The history and heritage of the Boston Terrier — the beloved 'American Gentleman' of dogs."
-    if any(w in low for w in ["dangers", "prevent", "ugly truths", "truths about"]):
+    if any(w in low for w in ["dangers","prevent","ugly truths","truths about"]):
         return "The honest realities of Boston Terrier ownership — what to watch for and how to prepare."
-    if any(w in low for w in ["watercolor", "paint", "draw"]):
+    if any(w in low for w in ["watercolor","paint","draw"]):
         return "An art tutorial capturing the Boston Terrier's unmistakable markings and charm."
-    if any(w in low for w in ["tea party", "playdate", "count their treats", "snacking", "funniest", "family love", "life with", "destroyed"]):
+    if any(w in low for w in ["tea party","playdate","count their treats","snacking","funniest","family love","life with","destroyed"]):
         return "Everyday Boston Terrier joy — the funny, heartwarming moments of life with these little companions."
-    # default
     base = re.sub(r"\s*\(part\s*\d+\)\s*$", "", title, flags=re.I).strip()
     return f"A Boston Terrier feature on BT TV: {base}.{part}".strip()
-
-def api_get(url):
-    req = urllib.request.Request(url, headers={"Accept": "application/xml"})
-    return urllib.request.urlopen(req, timeout=30).read()
 
 def plex(path, conf, params=None, method="GET"):
     q = dict(params or {}); q["X-Plex-Token"] = conf["PLEX_TOKEN"]
@@ -82,66 +79,94 @@ def plex(path, conf, params=None, method="GET"):
     req = urllib.request.Request(url, method=method, headers={"Accept": "application/xml"})
     return urllib.request.urlopen(req, timeout=60).read()
 
+def log(msg):
+    print(f"[{time.strftime('%F %T')}] {msg}")
+
 def main():
     conf = load_conf()
-    folder = conf["BTTV_FOLDER"]; section = conf["PLEX_SECTION"]
+    section = conf["PLEX_SECTION"]
 
-    current = {f for f in os.listdir(folder) if f.lower().endswith(".mkv")}
-    seen = set()
-    if os.path.exists(SEEN):
-        seen = set(open(SEEN).read().splitlines())
-    new = sorted(current - seen)
-    if not new:
-        return  # nothing to do; stay quiet for cron
+    # --- read current Plex item list for the BT TV library ---
+    try:
+        raw = plex(f"/library/sections/{section}/all", conf)
+        root = ET.fromstring(raw)
+    except Exception as e:
+        log(f"Plex query failed ({e}); doing nothing this run.")
+        return
 
-    print(f"[{time.strftime('%F %T')}] {len(new)} new file(s): {new}")
-
-    # 1) trigger a Plex scan of the BT TV library, wait for it to index
-    plex(f"/library/sections/{section}/refresh", conf)
-    time.sleep(45)  # give Plex time to scan the new items
-
-    # 2) pull the section's items, match new files by their Part file path, write metadata
-    items = ET.fromstring(plex(f"/library/sections/{section}/all", conf))
-    by_file = {}
-    for v in items.iter("Video"):
+    current = {}   # ratingKey -> filename
+    for v in root.iter("Video"):
         rk = v.get("ratingKey")
         part = v.find(".//Part")
-        if part is not None and part.get("file"):
-            by_file[os.path.basename(part.get("file"))] = rk
+        fname = os.path.basename(part.get("file")) if (part is not None and part.get("file")) else (v.get("title") or rk)
+        if rk:
+            current[rk] = fname
 
-    wrote = 0
-    for fname in new:
-        rk = by_file.get(fname)
-        if not rk:
-            print(f"  (not indexed yet, will retry next run): {fname}")
-            continue  # don't mark seen; picked up next run
+    # SAFETY GUARD: empty library almost always means a scan-in-progress or drive/token issue.
+    if not current:
+        log("Plex returned 0 items for BT TV library; safety guard — doing nothing.")
+        return
+
+    # --- load last-known state ---
+    prev = {}
+    if os.path.exists(STATE):
+        try:
+            prev = json.load(open(STATE))
+        except Exception:
+            prev = {}
+
+    prev_keys = set(prev.keys())
+    cur_keys = set(current.keys())
+    added   = cur_keys - prev_keys
+    removed = prev_keys - cur_keys
+
+    # First-ever run (no state): seed silently, no describe/refresh, so we don't
+    # re-describe the existing library or false-trigger.
+    if not prev:
+        json.dump(current, open(STATE, "w"))
+        log(f"Initialized state with {len(current)} existing items (no action).")
+        return
+
+    changed = False
+
+    # --- describe newly added items ---
+    for rk in sorted(added):
+        fname = current[rk]
         title = clean_title(fname)
         summary = summarize(title)
-        plex(f"/library/sections/{section}/all", conf, {
-            "type": "1", "id": rk,
-            "title.value": title, "title.locked": "1",
-            "summary.value": summary, "summary.locked": "1",
-        }, method="PUT")
-        print(f"  wrote: {title}\n         {summary}")
-        wrote += 1
-        seen.add(fname)
+        try:
+            plex(f"/library/sections/{section}/all", conf, {
+                "type": "1", "id": rk,
+                "title.value": title, "title.locked": "1",
+                "summary.value": summary, "summary.locked": "1",
+            }, method="PUT")
+            log(f"ADDED  -> {title}")
+            log(f"          {summary}")
+            changed = True
+        except Exception as e:
+            log(f"  failed to write metadata for {fname}: {e}")
 
-    # persist processed list (only the ones we actually wrote + already-seen)
-    open(SEEN, "w").write("\n".join(sorted(seen)))
+    # --- note removed items (Plex already dropped them; we just refresh) ---
+    for rk in sorted(removed):
+        log(f"REMOVED -> {prev.get(rk)}")
+        changed = True
 
-    # 3) if we added anything, refresh ONLY the BT TV channel schedule
-    if wrote:
+    # --- save new state ---
+    json.dump(current, open(STATE, "w"))
+
+    # --- if anything changed, refresh ONLY the BT TV channel schedule ---
+    if changed:
         try:
             urllib.request.urlopen(urllib.request.Request(
                 f"{conf['NTV_URL']}/api/schedule/refresh-channel/{conf['BTTV_CHANNEL']}",
                 method="POST"), timeout=30).read()
-            print(f"  refreshed BT TV schedule ({wrote} new).")
+            log(f"Refreshed BT TV schedule (+{len(added)} / -{len(removed)}).")
         except Exception as e:
-            print(f"  schedule refresh error: {e}")
+            log(f"  schedule refresh error: {e}")
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"[{time.strftime('%F %T')}] ERROR: {e}")
+        log(f"ERROR: {e}")
         sys.exit(1)
