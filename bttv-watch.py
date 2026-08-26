@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 BT TV auto-maintain watcher (free, local, no external API).
- 
+
 Runs via cron. Tracks the Plex BT TV library's item list:
   - NEW items  -> generate title + keyword summary, write to Plex.
   - REMOVED items (deleted or removed-from-library in Plex) -> just note them.
   - ANY change (add or remove) -> refresh ONLY the BT TV channel schedule.
- 
+
 Safety guard: if Plex returns 0 items or is unreachable, do NOTHING (prevents a
 drive unmount / server hiccup from looking like "everything was deleted").
- 
+
 Config: bttv-watch.conf (same dir):
   PLEX_TOKEN=...
   PLEX_URL=http://localhost:32400
@@ -20,11 +20,11 @@ Config: bttv-watch.conf (same dir):
 """
 import os, re, sys, time, json, urllib.request, urllib.parse
 import xml.etree.ElementTree as ET
- 
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONF = os.path.join(HERE, "bttv-watch.conf")
 STATE = os.path.join(HERE, "bttv-watch.state")   # JSON: {ratingKey: filename} last seen in Plex
- 
+
 def load_conf():
     c = {}
     with open(CONF) as f:
@@ -34,13 +34,13 @@ def load_conf():
                 k, v = line.split("=", 1)
                 c[k.strip()] = v.strip()
     return c
- 
+
 def clean_title(fname):
     t = re.sub(r"\.[A-Za-z0-9]+$", "", fname)
     t = t.replace("｜", "|").replace("：", ":")
     t = re.sub(r"\s+", " ", t).strip()
     return t
- 
+
 def summarize(title):
     low = title.lower()
     part = ""
@@ -64,35 +64,35 @@ def summarize(title):
         return "A complete Boston Terrier breed profile — history, temperament, traits, and care."
     if any(w in low for w in ["history","gentleman","origin","pit fighter","became"]):
         return "The history and heritage of the Boston Terrier — the beloved 'American Gentleman' of dogs."
-    if any(w in low for w in ["dangers","prevent","ugly truths","truths about"]):
-        return "The honest realities of Boston Terrier ownership — what to watch for and how to prepare."
+    if any(w in low for w in ["dangers","prevent","ugly truths","truths about","reasons","not for everyone","aren't for","arent for","aren\u2019t for","downside","downsides","cons of","before you get","before you buy","don't get","dont get","things to know","what to know","regret","challenges","hard truth"]):
+        return "An honest look at the realities of Boston Terrier ownership — the challenges, trade-offs, and things to know before bringing one home."
     if any(w in low for w in ["watercolor","paint","draw"]):
         return "An art tutorial capturing the Boston Terrier's unmistakable markings and charm."
     if any(w in low for w in ["tea party","playdate","count their treats","snacking","funniest","family love","life with","destroyed"]):
         return "Everyday Boston Terrier joy — the funny, heartwarming moments of life with these little companions."
     base = re.sub(r"\s*\(part\s*\d+\)\s*$", "", title, flags=re.I).strip()
     return f"A Boston Terrier feature on BT TV: {base}.{part}".strip()
- 
+
 def plex(path, conf, params=None, method="GET"):
     q = dict(params or {}); q["X-Plex-Token"] = conf["PLEX_TOKEN"]
     url = f"{conf['PLEX_URL']}{path}?{urllib.parse.urlencode(q)}"
     req = urllib.request.Request(url, method=method, headers={"Accept": "application/xml"})
     return urllib.request.urlopen(req, timeout=60).read()
- 
+
 def log(msg):
     print(f"[{time.strftime('%F %T')}] {msg}")
- 
+
 def main():
     conf = load_conf()
     section = conf["PLEX_SECTION"]
- 
+
     # --- trigger a Plex scan first, so new files get indexed (auto-scan may be off) ---
     try:
         plex(f"/library/sections/{section}/refresh", conf)
         time.sleep(30)  # give Plex a moment to index new files before we read the list
     except Exception as e:
         log(f"Plex scan trigger failed ({e}); continuing with current index.")
- 
+
     # --- read current Plex item list for the BT TV library ---
     try:
         raw = plex(f"/library/sections/{section}/all", conf)
@@ -100,7 +100,7 @@ def main():
     except Exception as e:
         log(f"Plex query failed ({e}); doing nothing this run.")
         return
- 
+
     current = {}   # ratingKey -> filename
     for v in root.iter("Video"):
         rk = v.get("ratingKey")
@@ -108,12 +108,12 @@ def main():
         fname = os.path.basename(part.get("file")) if (part is not None and part.get("file")) else (v.get("title") or rk)
         if rk:
             current[rk] = fname
- 
+
     # SAFETY GUARD: empty library almost always means a scan-in-progress or drive/token issue.
     if not current:
         log("Plex returned 0 items for BT TV library; safety guard — doing nothing.")
         return
- 
+
     # --- load last-known state ---
     prev = {}
     if os.path.exists(STATE):
@@ -121,21 +121,21 @@ def main():
             prev = json.load(open(STATE))
         except Exception:
             prev = {}
- 
+
     prev_keys = set(prev.keys())
     cur_keys = set(current.keys())
     added   = cur_keys - prev_keys
     removed = prev_keys - cur_keys
- 
+
     # First-ever run (no state): seed silently, no describe/refresh, so we don't
     # re-describe the existing library or false-trigger.
     if not prev:
         json.dump(current, open(STATE, "w"))
         log(f"Initialized state with {len(current)} existing items (no action).")
         return
- 
+
     changed = False
- 
+
     # --- describe newly added items ---
     for rk in sorted(added):
         fname = current[rk]
@@ -152,15 +152,15 @@ def main():
             changed = True
         except Exception as e:
             log(f"  failed to write metadata for {fname}: {e}")
- 
+
     # --- note removed items (Plex already dropped them; we just refresh) ---
     for rk in sorted(removed):
         log(f"REMOVED -> {prev.get(rk)}")
         changed = True
- 
+
     # --- save new state ---
     json.dump(current, open(STATE, "w"))
- 
+
     # --- if anything changed, refresh ONLY the BT TV channel schedule ---
     if changed:
         try:
@@ -170,11 +170,10 @@ def main():
             log(f"Refreshed BT TV schedule (+{len(added)} / -{len(removed)}).")
         except Exception as e:
             log(f"  schedule refresh error: {e}")
- 
+
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         log(f"ERROR: {e}")
         sys.exit(1)
- 
