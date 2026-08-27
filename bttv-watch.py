@@ -68,8 +68,8 @@ def summarize(title):
         return "An honest look at the realities of Boston Terrier ownership — the challenges, trade-offs, and things to know before bringing one home."
     if any(w in low for w in ["watercolor","paint","draw"]):
         return "An art tutorial capturing the Boston Terrier's unmistakable markings and charm."
-    if any(w in low for w in ["tea party","playdate","count their treats","snacking","funniest","family love","life with","destroyed"]):
-        return "Everyday Boston Terrier joy — the funny, heartwarming moments of life with these little companions."
+    if any(w in low for w in ["funny","funniest","hilarious","hilariously","lol","laugh","comedy","compilation","best moments","cutest","cute moments","adorable moments","fails","goofy","tea party","playdate","count their treats","snacking","family love","life with","destroyed","try not to laugh"]):
+        return "A laugh-out-loud collection of Boston Terrier antics — goofy, heartwarming, and impossibly funny moments from these little companions."
     base = re.sub(r"\s*\(part\s*\d+\)\s*$", "", title, flags=re.I).strip()
     return f"A Boston Terrier feature on BT TV: {base}.{part}".strip()
 
