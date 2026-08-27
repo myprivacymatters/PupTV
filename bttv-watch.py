@@ -60,14 +60,16 @@ def summarize(title):
         return "Adorable Boston Terrier puppy antics — clumsy, playful, and impossibly cute."
     if "service dog" in low or "service dogs" in low:
         return "A look at Boston Terriers as loyal service and companion dogs."
-    if any(w in low for w in ["breed information","everything you need","characteristics","breed info"]):
-        return "A complete Boston Terrier breed profile — history, temperament, traits, and care."
+    if any(w in low for w in ["breed information","everything you need","characteristics","breed info","101","facts","facts and information","guide to","all about","dogs 101","breed profile"]):
+        return "A complete Boston Terrier breed profile — history, temperament, traits, facts, and care."
     if any(w in low for w in ["history","gentleman","origin","pit fighter","became"]):
         return "The history and heritage of the Boston Terrier — the beloved 'American Gentleman' of dogs."
-    if any(w in low for w in ["dangers","prevent","ugly truths","truths about","reasons","not for everyone","aren't for","arent for","aren\u2019t for","downside","downsides","cons of","before you get","before you buy","don't get","dont get","things to know","what to know","regret","challenges","hard truth"]):
-        return "An honest look at the realities of Boston Terrier ownership — the challenges, trade-offs, and things to know before bringing one home."
+    if any(w in low for w in ["dangers","prevent","ugly truths","truths about","reasons","not for everyone","aren't for","arent for","aren\u2019t for","downside","downsides","cons of","pros & cons","pros and cons","pros/cons","should you get","should i get","before you get","before you buy","don't get","dont get","things to know","what to know","regret","challenges","hard truth"]):
+        return "An honest look at the realities of Boston Terrier ownership — the pros, the cons, and what to weigh before bringing one home."
     if any(w in low for w in ["watercolor","paint","draw"]):
         return "An art tutorial capturing the Boston Terrier's unmistakable markings and charm."
+    if any(w in low for w in ["chew","chews","chewing","destroy","destructive","trouble","trouble-making","troublemaker","naughty","mischief","mischievous","bad behavior","behaving badly","tearing","wrecking"]):
+        return "The mischief files — a Boston Terrier's talent for chaos, chewing, and getting into everything it shouldn't."
     if any(w in low for w in ["funny","funniest","hilarious","hilariously","lol","laugh","comedy","compilation","best moments","cutest","cute moments","adorable moments","fails","goofy","tea party","playdate","count their treats","snacking","family love","life with","destroyed","try not to laugh"]):
         return "A laugh-out-loud collection of Boston Terrier antics — goofy, heartwarming, and impossibly funny moments from these little companions."
     base = re.sub(r"\s*\(part\s*\d+\)\s*$", "", title, flags=re.I).strip()
